@@ -1,0 +1,12 @@
+ipykernel
+jupyter 
+pandas
+streamlit
+openai
+#matplotlib
+#matplotlib-inline
+#numpy
+#seaborn
+pytest
+pytest-cov
+#scikit-learn
