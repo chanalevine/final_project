@@ -15,50 +15,30 @@ HEADERS = {
     ),
     "Accept-Language": "en-US,en;q=0.9",
     "Referer": "https://www.shopevergreenkosher.com/",
-    "Upgrade-Insecure-Requests": "1",
-    "Sec-Fetch-Dest": "document",
-    "Sec-Fetch-Mode": "navigate",
-    "Sec-Fetch-Site": "same-origin",
-    "Sec-Fetch-User": "?1",
 }
 
 def scrape_evergreen(url):
     session = requests.Session()
     session.headers.update(HEADERS)
 
-    # Step 1: Visit homepage to get cookies
+    # Warm-up request for cookies
     session.get(BASE_URL)
 
-    # Step 2: Visit category page
     res = session.get(url)
     print("Status:", res.status_code)
 
     soup = BeautifulSoup(res.text, "html.parser")
 
-    products = soup.select("div.product-grid-item")
+    # Evergreen uses <sp-product> custom elements
+    products = soup.select("sp-product")
     results = []
 
     for p in products:
-        name_tag = p.select_one(".product-item-name, .product-title, a.product-item-link")
-        price_tag = p.select_one(".price, .product-price")
-        unit_tag = p.select_one(".product-unit, .size, .weight")
-        img_tag = p.select_one("img")
-
-        name = name_tag.get_text(strip=True) if name_tag else None
-        price = price_tag.get_text(strip=True) if price_tag else None
-        unit = unit_tag.get_text(strip=True) if unit_tag else None
-
-        img = None
-        if img_tag and img_tag.has_attr("src"):
-            img = img_tag["src"]
-            if img.startswith("/"):
-                img = BASE_URL + img
-
         results.append({
-            "name": name,
-            "price": price,
-            "unit": unit,
-            "image": img
+            "name": p.get("product-name"),
+            "price": p.get("price"),
+            "unit": p.get("unit"),
+            "image": p.get("image")
         })
 
     return results
