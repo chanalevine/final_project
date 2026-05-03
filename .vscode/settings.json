@@ -1,0 +1,10 @@
+{
+    "python.analysis.extraPaths": [
+        "./calculate",
+        "./ai",
+        "./app",
+        "./database",
+        "./scraping",
+        "./tests"
+    ]
+}
