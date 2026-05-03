@@ -2,62 +2,66 @@ import sqlite3
 import os
 
 def init_db():
+    db_path = os.path.join("database", "food_data.db")
+
     os.makedirs("database", exist_ok=True)
 
-    conn = sqlite3.connect("database/food_data.db")
-    cursor = conn.cursor()
+    conn = sqlite3.connect(db_path)
+    cur = conn.cursor()
 
-    # ---------------------------------------------------------
-    # RECIPES TABLE
-    # ---------------------------------------------------------
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS recipes (
-            id INTEGER PRIMARY KEY,
+    print("Resetting database...")
+
+    # Drop old tables
+    cur.execute("DROP TABLE IF EXISTS recipe_ingredients")
+    cur.execute("DROP TABLE IF EXISTS ingredients")
+    cur.execute("DROP TABLE IF EXISTS recipes")
+    cur.execute("DROP TABLE IF EXISTS nutrition")
+
+    # Recipes table
+    cur.execute("""
+        CREATE TABLE recipes (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             title TEXT,
-            author TEXT,
-            image_url TEXT,
-            instructions TEXT,
-            date TEXT,
-            url_slug TEXT,
-            raw_json TEXT
+            url_slug TEXT UNIQUE
         )
     """)
 
-    # ---------------------------------------------------------
-    # INGREDIENTS TABLE
-    # ---------------------------------------------------------
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS ingredients (
+    # Ingredients table (ONLY price, no walmart_price)
+    cur.execute("""
+        CREATE TABLE ingredients (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
-            recipe_id INTEGER NOT NULL,
-            raw_text TEXT,
-            quantity TEXT,
-            unit TEXT,
-            ingredient_name TEXT,
-            normalized_name TEXT,
-            FOREIGN KEY (recipe_id) REFERENCES recipes(id)
-        )
-    """)
-
-    # ---------------------------------------------------------
-    # WALMART PRODUCTS TABLE
-    # ---------------------------------------------------------
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS walmart_products (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            query TEXT,
-            name TEXT,
+            name TEXT UNIQUE,
             price REAL,
-            url TEXT,
-            image TEXT,
-            package_amount REAL,
-            package_unit TEXT
+            price_unit TEXT,
+            package_size TEXT
+        )
+    """)
+
+    # Recipe-Ingredient join table
+    cur.execute("""
+        CREATE TABLE recipe_ingredients (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            recipe_id INTEGER,
+            ingredient_id INTEGER,
+            quantity TEXT,
+            FOREIGN KEY(recipe_id) REFERENCES recipes(id),
+            FOREIGN KEY(ingredient_id) REFERENCES ingredients(id)
+        )
+    """)
+
+    # Nutrition table (description only)
+    cur.execute("""
+        CREATE TABLE nutrition (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            ingredient_name TEXT UNIQUE,
+            description TEXT
         )
     """)
 
     conn.commit()
     conn.close()
-    print("Database schema initialized correctly.")
+    print("Database recreated successfully.")
+    
 
 if __name__ == "__main__":
     init_db()

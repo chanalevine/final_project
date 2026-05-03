@@ -3,7 +3,6 @@ from core.db import get_connection
 from core.normalizer import normalize_ingredient
 from core.walmart import get_price_for_ingredient
 
-
 def estimate_cost(quantity, price, package_amount, package_unit):
     if price is None:
         return 0

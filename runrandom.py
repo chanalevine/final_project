@@ -1,17 +1,28 @@
-import requests
+import sqlite3
 
-url = "https://www.walmart.com/search?q=eggs"
+DB_PATH = "database/food_data.db"
 
-headers = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
-    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9",
-    "Accept-Language": "en-US,en;q=0.9",
-    "Referer": "https://www.google.com/",
-}
+def print_table(table, limit=10):
+    conn = sqlite3.connect(DB_PATH)
+    cur = conn.cursor()
 
-res = requests.get(url, headers=headers)
-print(res.text[:5000])
+    # Get column names
+    cur.execute(f"PRAGMA table_info({table})")
+    cols = [col[1] for col in cur.fetchall()]
+
+    print(f"\n===== {table.upper()} (showing {limit} rows) =====")
+    print(" | ".join(cols))
+    print("-" * 60)
+
+    # Get rows
+    cur.execute(f"SELECT * FROM {table} LIMIT {limit}")
+    rows = cur.fetchall()
+
+    for row in rows:
+        print(" | ".join(str(x) if x is not None else "" for x in row))
+
+    conn.close()
+
+print_table("recipes", 5)
+print_table("ingredients", 10)
+print_table("recipe_ingredients", 10)
