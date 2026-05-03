@@ -1,12 +1,17 @@
-import sqlite3
+import requests
 
-conn = sqlite3.connect("food_data.db")
-cursor = conn.cursor()
+url = "https://www.walmart.com/search?q=eggs"
 
-cursor.execute("ALTER TABLE walmart_products ADD COLUMN package_amount REAL;")
-cursor.execute("ALTER TABLE walmart_products ADD COLUMN package_unit TEXT;")
+headers = {
+    "User-Agent": (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+        "AppleWebKit/537.36 (KHTML, like Gecko) "
+        "Chrome/124.0.0.0 Safari/537.36"
+    ),
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9",
+    "Accept-Language": "en-US,en;q=0.9",
+    "Referer": "https://www.google.com/",
+}
 
-conn.commit()
-conn.close()
-
-print("Columns added.")
+res = requests.get(url, headers=headers)
+print(res.text[:5000])

@@ -1,31 +1,47 @@
 import sqlite3
+import os
 
 def init_db():
+    os.makedirs("database", exist_ok=True)
+
     conn = sqlite3.connect("database/food_data.db")
     cursor = conn.cursor()
 
-    # Recipes table
+    # ---------------------------------------------------------
+    # RECIPES TABLE
+    # ---------------------------------------------------------
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS recipes (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            name TEXT NOT NULL,
-            servings INTEGER
+            id INTEGER PRIMARY KEY,
+            title TEXT,
+            author TEXT,
+            image_url TEXT,
+            instructions TEXT,
+            date TEXT,
+            url_slug TEXT,
+            raw_json TEXT
         )
     """)
 
-    # Ingredients table
+    # ---------------------------------------------------------
+    # INGREDIENTS TABLE
+    # ---------------------------------------------------------
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS ingredients (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
             recipe_id INTEGER NOT NULL,
-            ingredient_name TEXT NOT NULL,
+            raw_text TEXT,
             quantity TEXT,
+            unit TEXT,
+            ingredient_name TEXT,
             normalized_name TEXT,
             FOREIGN KEY (recipe_id) REFERENCES recipes(id)
         )
     """)
 
-    # Walmart products table (same as you already use)
+    # ---------------------------------------------------------
+    # WALMART PRODUCTS TABLE
+    # ---------------------------------------------------------
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS walmart_products (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -33,13 +49,15 @@ def init_db():
             name TEXT,
             price REAL,
             url TEXT,
-            image TEXT
+            image TEXT,
+            package_amount REAL,
+            package_unit TEXT
         )
     """)
 
     conn.commit()
     conn.close()
-    print("Database schema initialized.")
+    print("Database schema initialized correctly.")
 
 if __name__ == "__main__":
     init_db()
