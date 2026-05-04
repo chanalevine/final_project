@@ -7,9 +7,6 @@ from core.cost_engine import calculate_recipe_cost
 from ai.ai_helper import ask_ai_with_history, ask_cheaper_substitution
 
 
-# ---------------------------------------------------------
-# DATA LOADERS
-# ---------------------------------------------------------
 @st.cache_data
 def load_data():
     conn = get_connection()
@@ -20,9 +17,6 @@ def load_data():
     return recipes, recipe_ingredients, ingredients
 
 
-# ---------------------------------------------------------
-# SAVE HELPERS
-# ---------------------------------------------------------
 def save_recipes(df):
     conn = get_connection()
     df.to_sql("recipes", conn, if_exists="replace", index=False)
@@ -41,9 +35,6 @@ def save_ingredients(df):
     conn.close()
 
 
-# ---------------------------------------------------------
-# MAIN APP
-# ---------------------------------------------------------
 def main():
     st.set_page_config(page_title="Recipe Cost and Analysis", layout="wide")
 
@@ -132,7 +123,7 @@ def main():
     # -----------------------------------------------------
     # TABS
     # -----------------------------------------------------
-    tab_overview, tab_cost, tab_chat = st.tabs(["Overview", "Cost analysis", "Chatbot"])
+    tab_overview, tab_cost, tab_chat = st.tabs(["Overview", "Chef’s Assistant", "Cooking Q&A"])
 
     # -----------------------------------------------------
     # TAB 1 — OVERVIEW
@@ -158,7 +149,10 @@ def main():
             )
 
             merged["ingredient"] = merged["name"].fillna(merged["quantity"])
-            display_df = merged[["ingredient", "quantity"]].copy()
+
+            # Show ingredient + price instead of quantity
+            display_df = merged[["ingredient", "price"]].copy()
+            display_df.rename(columns={"price": "price (per package/unit)"}, inplace=True)
             st.dataframe(display_df, hide_index=True, use_container_width=True)
 
         st.subheader("Add Ingredient")
@@ -172,7 +166,6 @@ def main():
         if st.button("Add ingredient", key="add_ing_btn"):
             if ing_name.strip() and ing_qty.strip():
 
-                # 1) Find or create ingredient
                 existing = ingredients_df[
                     ingredients_df["name"].str.lower() == ing_name.strip().lower()
                 ]
@@ -193,7 +186,6 @@ def main():
                     save_ingredients(st.session_state.ingredients_df)
                     ingredient_id = new_ing_id
 
-                # 2) Insert into recipe_ingredients
                 new_rec_ing_id = int(recipe_ingredients_df["id"].max()) + 1 if not recipe_ingredients_df.empty else 1
                 new_row = pd.DataFrame([{
                     "id": new_rec_ing_id,
@@ -274,39 +266,54 @@ def main():
 
             if st.button("Suggest cheaper substitution", key="sub_btn"):
                 row = breakdown_df[breakdown_df["ingredient"] == selected_ing].iloc[0]
-                reply = ask_cheaper_substitution(row["ingredient"], row["cost"])
+                with st.spinner("Finding a cheaper kosher substitution for this recipe..."):
+                    reply = ask_cheaper_substitution(
+                        row["ingredient"],
+                        row["cost"],
+                        selected_recipe_name
+                    )
                 st.write(reply)
         else:
             st.info("Click 'Calculate cost' to see cost analysis for this recipe.")
 
     # -----------------------------------------------------
-    # TAB 3 — CHATBOT
+    # TAB 3 — CHEF’S ASSISTANT (COOKING Q&A)
     # -----------------------------------------------------
     with tab_chat:
-        st.header("Cooking questions")
+        st.header("Chef’s Assistant")
 
+        # Clear input BEFORE widget is created
+        if st.session_state.get("clear_chat_input", False):
+            st.session_state["chat_input"] = ""
+            st.session_state["clear_chat_input"] = False
+
+        # Display chat history
         for msg in st.session_state.chat_history:
             if msg["role"] == "user":
                 st.markdown(f"**You:** {msg['content']}")
             else:
                 st.markdown(f"**Assistant:** {msg['content']}")
 
+        # Text input
         user_input = st.text_input("Ask a cooking question", key="chat_input")
 
         col_a, col_b = st.columns(2)
 
         with col_a:
-            if st.button("Send question", key="chat_send"):
+            if st.button("Send question"):
                 if user_input.strip():
-                    ask_ai_with_history(st.session_state.chat_history, user_input)
-                    st.experimental_rerun()
+                    with st.spinner("Simmering on your question..."):
+                        ask_ai_with_history(st.session_state.chat_history, user_input)
+
+                    st.session_state["clear_chat_input"] = True
+                    st.rerun()
 
         with col_b:
-            if st.button("Clear conversation", key="chat_clear"):
+            if st.button("Clear conversation"):
                 st.session_state.chat_history = []
-                st.experimental_rerun()
+                st.session_state["clear_chat_input"] = True
+                st.rerun()
 
 
 if __name__ == "__main__":
     main()
-    
