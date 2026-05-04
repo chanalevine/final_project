@@ -1,4 +1,4 @@
-# 🍳 Recipe Cost Wizard — **[Click Here!](https://recipe-cost-finder.streamlit.app/)
+# 🍳 Recipe Cost Wizard — **[Click Here!](https://recipe-cost-finder.streamlit.app/)**
 
 Recipe Cost Wizard is a fun and interactive Streamlit web app that helps you explore recipes scraped from **Kosher.com**, calculate ingredient costs using the **Kroger API**, and learn interesting food facts scraped from **Wikipedia**. It also includes a built‑in AI cooking assistant powered by Azure OpenAI to answer your kitchen questions, suggest substitutions, and explain recipe steps.
 
