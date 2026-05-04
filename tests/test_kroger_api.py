@@ -1,11 +1,13 @@
 from unittest.mock import MagicMock
 import sqlite3
 import scraping.kroger_api as ka
-
-
 # ---------------------------------------------------------
 # TEST 1 — get_token() returns token from fake API
 # ---------------------------------------------------------
+
+DB_PATH = "database/food_data.db"
+
+
 def test_get_token(monkeypatch):
     """Make sure get_token pulls the token from JSON."""
 

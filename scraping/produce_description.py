@@ -38,7 +38,7 @@ def get_wikipedia_description(ingredient):
                 continue
 
             # Skip paragraphs that are just pronunciation or metadata
-            if text.startswith("(") and ")" in text[:20]:
+            if text.startswith("("):
                 continue
 
             return text

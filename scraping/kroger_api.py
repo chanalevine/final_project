@@ -6,6 +6,8 @@ CLIENT_ID = "recipecostapp-bbcd2l09"
 CLIENT_SECRET = "3y0-wBTAsMbL4ZglQnMj2p87RYH6VKL2HFGXNEg1"
 STORE_ID = "01400943"
 
+DB_PATH = "database/food_data.db"
+
 
 def get_token():
     url = "https://api-ce.kroger.com/v1/connect/oauth2/token"
@@ -50,34 +52,28 @@ def kroger_search(ingredient, token):
 
 
 def update_all_ingredients():
-    conn = sqlite3.connect("database/food_data.db")
-    cur = conn.cursor()
+    conn = sqlite3.connect(DB_PATH)
+    cursor = conn.cursor()
 
-    cur.execute("SELECT id, name FROM ingredients")
-    rows = cur.fetchall()
+    cursor.execute("SELECT id, name FROM ingredients")
+    rows = cursor.fetchall()
 
     token = get_token()
 
-    print("\n===== UPDATING ALL INGREDIENT PRICES =====\n")
+    for ing_id, name in rows:
+        title, price, size = kroger_search(name, token)
 
-    for ing_id, ing_name in rows:
-        print(f"Ingredient: {ing_name}")
+        if price is not None:
+            cursor.execute(
+                """
+                UPDATE ingredients
+                SET price = ?, package_size = ?
+                WHERE id = ?
+                """,
+                (price, size, ing_id)
+            )
 
-        title, price, size = kroger_search(ing_name, token)
-
-        print("  Title:", title)
-        print("  Price:", price)
-        print("  Size:", size)
-
-        cur.execute("""
-            UPDATE ingredients
-            SET price = ?, price_unit = ?, package_size = ?
-            WHERE id = ?
-        """, (price, "each", size, ing_id))
-
-        conn.commit()
-        print("  ✔ Saved\n")
-
+    conn.commit()
     conn.close()
 
 
