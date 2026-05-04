@@ -1,10 +1,12 @@
+import sys
+import os
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
-
 from core.db import get_connection
 from core.cost_engine import calculate_recipe_cost
 from ai.ai_helper import ask_ai_with_history, ask_cheaper_substitution
+sys.path.append(os.path.dirname(os.path.dirname(__file__)))
 
 
 @st.cache_data
