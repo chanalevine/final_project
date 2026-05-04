@@ -1,79 +1,70 @@
-import os
 import pandas as pd
 import streamlit as st
 import matplotlib.pyplot as plt
 
 from core.db import get_connection
 from core.cost_engine import calculate_recipe_cost
-from core.normalizer import normalize_ingredient
 from ai.ai_helper import ask_ai_with_history, ask_cheaper_substitution
 
 
 # ---------------------------------------------------------
-# LOAD DATA
+# DATA LOADERS
 # ---------------------------------------------------------
-
 @st.cache_data
 def load_data():
     conn = get_connection()
-
     recipes = pd.read_sql_query("SELECT * FROM recipes", conn)
+    recipe_ingredients = pd.read_sql_query("SELECT * FROM recipe_ingredients", conn)
     ingredients = pd.read_sql_query("SELECT * FROM ingredients", conn)
-
-    try:
-        walmart = pd.read_sql_query("SELECT * FROM walmart_products", conn)
-    except Exception:
-        walmart = pd.DataFrame(columns=[
-            "query", "name", "price", "url", "image",
-            "package_amount", "package_unit"
-        ])
-
     conn.close()
-    return recipes, ingredients, walmart
+    return recipes, recipe_ingredients, ingredients
 
 
 # ---------------------------------------------------------
 # SAVE HELPERS
 # ---------------------------------------------------------
-
-def save_recipes(recipes_df):
+def save_recipes(df):
     conn = get_connection()
-    recipes_df.to_sql("recipes", conn, if_exists="replace", index=False)
+    df.to_sql("recipes", conn, if_exists="replace", index=False)
     conn.close()
 
 
-def save_ingredients(ingredients_df):
+def save_recipe_ingredients(df):
     conn = get_connection()
-    ingredients_df.to_sql("ingredients", conn, if_exists="replace", index=False)
+    df.to_sql("recipe_ingredients", conn, if_exists="replace", index=False)
+    conn.close()
+
+
+def save_ingredients(df):
+    conn = get_connection()
+    df.to_sql("ingredients", conn, if_exists="replace", index=False)
     conn.close()
 
 
 # ---------------------------------------------------------
 # MAIN APP
 # ---------------------------------------------------------
-
 def main():
-
     st.set_page_config(page_title="Recipe Cost and Analysis", layout="wide")
 
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
     if "recipes_df" not in st.session_state:
-        recipes_df, ingredients_df, walmart_df = load_data()
+        recipes_df, recipe_ingredients_df, ingredients_df = load_data()
         st.session_state.recipes_df = recipes_df
+        st.session_state.recipe_ingredients_df = recipe_ingredients_df
         st.session_state.ingredients_df = ingredients_df
-        st.session_state.walmart_df = walmart_df
 
     recipes_df = st.session_state.recipes_df
+    recipe_ingredients_df = st.session_state.recipe_ingredients_df
     ingredients_df = st.session_state.ingredients_df
 
     st.title("Recipe Cost and Analysis")
 
     # -----------------------------------------------------
-    # SIDEBAR — SELECT RECIPE
+    # SIDEBAR — SELECT / ADD / EDIT / DELETE RECIPE
     # -----------------------------------------------------
-
     st.sidebar.header("Recipes")
 
     recipe_names = recipes_df["title"].sort_values().tolist()
@@ -82,10 +73,7 @@ def main():
     selected_recipe_row = recipes_df.loc[recipes_df["title"] == selected_recipe_name].iloc[0]
     selected_recipe_id = int(selected_recipe_row["id"])
 
-    # -----------------------------------------------------
-    # SIDEBAR — ADD RECIPE
-    # -----------------------------------------------------
-
+    # ADD RECIPE
     st.sidebar.markdown("---")
     st.sidebar.subheader("Add New Recipe")
 
@@ -112,10 +100,7 @@ def main():
         else:
             st.sidebar.error("Please enter a title.")
 
-    # -----------------------------------------------------
-    # SIDEBAR — EDIT RECIPE
-    # -----------------------------------------------------
-
+    # EDIT RECIPE
     st.sidebar.markdown("---")
     st.sidebar.subheader("Edit Recipe")
 
@@ -131,124 +116,124 @@ def main():
         save_recipes(st.session_state.recipes_df)
         st.sidebar.success("Recipe updated. Refresh to see changes.")
 
-    # -----------------------------------------------------
-    # SIDEBAR — DELETE RECIPE
-    # -----------------------------------------------------
-
+    # DELETE RECIPE
     st.sidebar.markdown("---")
     st.sidebar.subheader("Delete Recipe")
 
     if st.sidebar.button("Delete recipe"):
         st.session_state.recipes_df = recipes_df[recipes_df["id"] != selected_recipe_id]
-        st.session_state.ingredients_df = ingredients_df[ingredients_df["recipe_id"] != selected_recipe_id]
+        st.session_state.recipe_ingredients_df = recipe_ingredients_df[
+            recipe_ingredients_df["recipe_id"] != selected_recipe_id
+        ]
         save_recipes(st.session_state.recipes_df)
-        save_ingredients(st.session_state.ingredients_df)
+        save_recipe_ingredients(st.session_state.recipe_ingredients_df)
         st.sidebar.success("Recipe deleted. Refresh to update.")
 
     # -----------------------------------------------------
-    # MAIN LAYOUT
+    # TABS
     # -----------------------------------------------------
-
-    col_left, col_right = st.columns([2, 1])
+    tab_overview, tab_cost, tab_chat = st.tabs(["Overview", "Cost analysis", "Chatbot"])
 
     # -----------------------------------------------------
-    # LEFT — INGREDIENTS
+    # TAB 1 — OVERVIEW
     # -----------------------------------------------------
-
-    with col_left:
+    with tab_overview:
         st.header(selected_recipe_name)
 
-        recipe_ingredients = ingredients_df[ingredients_df["recipe_id"] == selected_recipe_id]
+        recipe_ings = recipe_ingredients_df[
+            recipe_ingredients_df["recipe_id"] == selected_recipe_id
+        ]
 
         st.subheader("Ingredients")
 
-        if recipe_ingredients.empty:
+        if recipe_ings.empty:
             st.info("No ingredients stored for this recipe.")
         else:
-            if "last_cost_result" in st.session_state and st.session_state.last_cost_result:
-                breakdown_df = pd.DataFrame(st.session_state.last_cost_result["breakdown"])
+            merged = recipe_ings.merge(
+                ingredients_df,
+                left_on="ingredient_id",
+                right_on="id",
+                how="left",
+                suffixes=("", "_ing")
+            )
 
-                merged = recipe_ingredients.merge(
-                    breakdown_df,
-                    left_on="ingredient_name",
-                    right_on="ingredient",
-                    how="left"
-                )
-
-                display_df = merged[["ingredient_name", "quantity", "cost"]]
-            else:
-                display_df = recipe_ingredients[["ingredient_name", "quantity"]]
-                display_df["cost"] = None
-
+            merged["ingredient"] = merged["name"].fillna(merged["quantity"])
+            display_df = merged[["ingredient", "quantity"]].copy()
             st.dataframe(display_df, hide_index=True, use_container_width=True)
-
-        # -------------------------------------------------
-        # ADD INGREDIENT
-        # -------------------------------------------------
 
         st.subheader("Add Ingredient")
 
-        ing_name = st.text_input("Ingredient name")
-        ing_qty = st.text_input("Quantity (e.g., '2 onions', '3 tbsp')")
+        col_ing_name, col_ing_qty = st.columns(2)
+        with col_ing_name:
+            ing_name = st.text_input("Ingredient name", key="ing_name_input")
+        with col_ing_qty:
+            ing_qty = st.text_input("Quantity (e.g., '2 cups')", key="ing_qty_input")
 
-        if st.button("Add ingredient"):
+        if st.button("Add ingredient", key="add_ing_btn"):
             if ing_name.strip() and ing_qty.strip():
-                new_ing_id = int(ingredients_df["id"].max()) + 1 if not ingredients_df.empty else 1
-                normalized = normalize_ingredient(ing_name.strip())
 
+                # 1) Find or create ingredient
+                existing = ingredients_df[
+                    ingredients_df["name"].str.lower() == ing_name.strip().lower()
+                ]
+
+                if not existing.empty:
+                    ingredient_id = int(existing.iloc[0]["id"])
+                else:
+                    new_ing_id = int(ingredients_df["id"].max()) + 1 if not ingredients_df.empty else 1
+                    new_ing_row = pd.DataFrame([{
+                        "id": new_ing_id,
+                        "name": ing_name.strip(),
+                        "price": None,
+                        "price_unit": None,
+                        "package_size": None
+                    }])
+                    ingredients_df = pd.concat([ingredients_df, new_ing_row], ignore_index=True)
+                    st.session_state.ingredients_df = ingredients_df
+                    save_ingredients(st.session_state.ingredients_df)
+                    ingredient_id = new_ing_id
+
+                # 2) Insert into recipe_ingredients
+                new_rec_ing_id = int(recipe_ingredients_df["id"].max()) + 1 if not recipe_ingredients_df.empty else 1
                 new_row = pd.DataFrame([{
-                    "id": new_ing_id,
+                    "id": new_rec_ing_id,
                     "recipe_id": selected_recipe_id,
-                    "ingredient_name": ing_name.strip(),
-                    "quantity": ing_qty.strip(),
-                    "unit": None,
-                    "raw_text": None,
-                    "normalized_name": normalized
+                    "ingredient_id": ingredient_id,
+                    "quantity": ing_qty.strip()
                 }])
 
-                st.session_state.ingredients_df = pd.concat(
-                    [ingredients_df, new_row], ignore_index=True
+                recipe_ingredients_df = pd.concat(
+                    [recipe_ingredients_df, new_row], ignore_index=True
                 )
-                save_ingredients(st.session_state.ingredients_df)
-                st.success("Ingredient added. Refresh to see it.")
+                st.session_state.recipe_ingredients_df = recipe_ingredients_df
+                save_recipe_ingredients(st.session_state.recipe_ingredients_df)
+
+                st.success("Ingredient added and linked. Refresh to see it.")
             else:
                 st.error("Please enter both ingredient name and quantity.")
 
     # -----------------------------------------------------
-    # RIGHT — COST CALCULATION
+    # TAB 2 — COST ANALYSIS
     # -----------------------------------------------------
+    with tab_cost:
+        st.header("Cost analysis")
 
-    with col_right:
-        st.subheader("Cost Calculation")
-
-        if st.button("Calculate cost"):
+        if st.button("Calculate cost", key="calc_cost_btn"):
             result = calculate_recipe_cost(selected_recipe_id)
             st.session_state.last_cost_result = result
 
         result = st.session_state.get("last_cost_result")
 
         if result:
-            st.markdown(f"Total cost: ${result['total_cost']}")
-            st.markdown(f"Cost per serving: ${result['cost_per_serving']}")
-
-            servings_slider = st.slider(
-                "Adjust servings",
-                min_value=1,
-                max_value=20,
-                value=int(result["servings"])
-            )
-
-            scaled_total = round(
-                result["total_cost"] * servings_slider / max(result["servings"], 1), 2
-            )
-            st.markdown(f"Cost for {servings_slider} servings: ${scaled_total}")
+            st.markdown(f"**Total cost:** ${result['total_cost']}")
+            st.markdown(f"**Cost per serving:** ${result['cost_per_serving']}")
 
             breakdown_df = pd.DataFrame(result["breakdown"])
 
-            st.subheader("Cost Breakdown by Ingredient")
+            st.subheader("Cost breakdown by ingredient")
             st.dataframe(
                 breakdown_df[
-                    ["ingredient", "quantity", "price", "package_amount", "package_unit", "cost"]
+                    ["ingredient", "price", "package_size", "price_unit", "cost"]
                 ],
                 hide_index=True,
                 use_container_width=True
@@ -260,6 +245,7 @@ def main():
             if chart_data.empty:
                 st.info("No cost data available for this recipe.")
             else:
+                st.subheader("Cost distribution")
                 fig, ax = plt.subplots(figsize=(5, 5))
                 ax.pie(
                     chart_data["cost"],
@@ -270,52 +256,55 @@ def main():
                 ax.axis("equal")
                 st.pyplot(fig)
 
-                st.subheader("Highest Cost Ingredient")
+                st.subheader("Highest cost ingredient")
                 most_expensive = chart_data.loc[chart_data["cost"].idxmax(), "ingredient"]
-                st.success(f"The ingredient contributing the most to cost is {most_expensive}")
+                st.success(f"The ingredient contributing the most to cost is **{most_expensive}**")
 
-        # -------------------------------------------------
-        # CHEAPER SUBSTITUTION
-        # -------------------------------------------------
+            if result.get("featured_ingredient"):
+                st.subheader("✨ Ingredient spotlight")
+                st.markdown(f"### {result['featured_ingredient']}")
+                st.write(result["featured_description"])
+            else:
+                st.info("No ingredient description available.")
 
-        st.subheader("Cheaper Substitution Suggestion")
+            st.subheader("Cheaper substitution suggestion")
 
-        if result:
             ingredient_options = breakdown_df["ingredient"].tolist()
-            selected_ing = st.selectbox("Select an ingredient", ingredient_options)
+            selected_ing = st.selectbox("Select an ingredient", ingredient_options, key="sub_ing_select")
 
-            if st.button("Suggest cheaper substitution"):
+            if st.button("Suggest cheaper substitution", key="sub_btn"):
                 row = breakdown_df[breakdown_df["ingredient"] == selected_ing].iloc[0]
                 reply = ask_cheaper_substitution(row["ingredient"], row["cost"])
                 st.write(reply)
+        else:
+            st.info("Click 'Calculate cost' to see cost analysis for this recipe.")
 
     # -----------------------------------------------------
-    # CHATBOT
+    # TAB 3 — CHATBOT
     # -----------------------------------------------------
+    with tab_chat:
+        st.header("Cooking questions")
 
-    st.markdown("---")
-    st.subheader("Cooking Questions")
+        for msg in st.session_state.chat_history:
+            if msg["role"] == "user":
+                st.markdown(f"**You:** {msg['content']}")
+            else:
+                st.markdown(f"**Assistant:** {msg['content']}")
 
-    for msg in st.session_state.chat_history:
-        if msg["role"] == "user":
-            st.markdown(f"You: {msg['content']}")
-        elif msg["role"] == "assistant":
-            st.markdown(f"Assistant: {msg['content']}")
+        user_input = st.text_input("Ask a cooking question", key="chat_input")
 
-    user_input = st.text_input("Ask a cooking question")
+        col_a, col_b = st.columns(2)
 
-    col_a, col_b = st.columns(2)
+        with col_a:
+            if st.button("Send question", key="chat_send"):
+                if user_input.strip():
+                    ask_ai_with_history(st.session_state.chat_history, user_input)
+                    st.experimental_rerun()
 
-    with col_a:
-        if st.button("Send question"):
-            if user_input.strip():
-                ask_ai_with_history(st.session_state.chat_history, user_input)
+        with col_b:
+            if st.button("Clear conversation", key="chat_clear"):
+                st.session_state.chat_history = []
                 st.experimental_rerun()
-
-    with col_b:
-        if st.button("Clear conversation"):
-            st.session_state.chat_history = []
-            st.experimental_rerun()
 
 
 if __name__ == "__main__":

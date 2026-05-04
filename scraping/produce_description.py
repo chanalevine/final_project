@@ -10,21 +10,39 @@ DB_PATH = "database/food_data.db"
 # ---------------------------------------------------------
 
 def get_wikipedia_description(ingredient):
-    search_url = f"https://en.wikipedia.org/wiki/{ingredient.replace(' ', '_')}"
+    # Convert ingredient to Wikipedia-style title
+    title = ingredient.strip().replace(" ", "_")
+    url = f"https://en.wikipedia.org/wiki/{title}"
 
     try:
-        res = requests.get(search_url, timeout=10)
+        res = requests.get(url, timeout=10, headers={
+            "User-Agent": "Mozilla/5.0"
+        })
+
         if res.status_code != 200:
             return None
 
         soup = BeautifulSoup(res.text, "html.parser")
 
-        # First paragraph of the article
-        p = soup.find("p")
-        if p:
+        # Skip disambiguation pages
+        if soup.find("table", {"id": "disambigbox"}):
+            return None
+
+        # Find the first REAL paragraph (skip empty or citation-only)
+        for p in soup.find_all("p"):
             text = p.get_text().strip()
+
+            # Skip empty paragraphs
+            if not text:
+                continue
+
+            # Skip paragraphs that are just pronunciation or metadata
+            if text.startswith("(") and ")" in text[:20]:
+                continue
+
             return text
-    except:
+
+    except Exception:
         return None
 
     return None
@@ -48,14 +66,13 @@ def store_description(ingredient, description):
 
 
 # ---------------------------------------------------------
-# 3. Loop through all ingredients
+# 3. Loop through all ingredients missing descriptions
 # ---------------------------------------------------------
 
 def update_all_descriptions():
     conn = sqlite3.connect(DB_PATH)
     cur = conn.cursor()
 
-    # Only fetch ingredients missing descriptions
     cur.execute("""
         SELECT name FROM ingredients
         WHERE name NOT IN (SELECT ingredient_name FROM nutrition)
@@ -64,6 +81,8 @@ def update_all_descriptions():
     ingredients = [row[0] for row in cur.fetchall()]
     conn.close()
 
+    print(f"Found {len(ingredients)} ingredients missing descriptions.\n")
+
     for ing in ingredients:
         print(f"Scraping description for: {ing}")
 
@@ -71,11 +90,13 @@ def update_all_descriptions():
 
         if desc:
             store_description(ing, desc)
-            print(f"Stored description for {ing}")
+            print(f"  ✔ Stored description")
         else:
-            print(f"No description found for {ing}")
+            print(f"  ✘ No description found")
 
-        time.sleep(0.5)
+        time.sleep(0.5)  # Be polite to Wikipedia
+
+    print("\nAll descriptions updated.")
 
 
 if __name__ == "__main__":

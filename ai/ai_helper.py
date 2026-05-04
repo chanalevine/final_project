@@ -1,6 +1,8 @@
 import os
 import openai
+from dotenv import load_dotenv
 
+load_dotenv()  # <-- THIS MUST RUN BEFORE load_api_key()
 def load_api_key():
     """
     Load the OpenAI API key from environment variables.
