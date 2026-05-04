@@ -5,6 +5,7 @@ from openai import AzureOpenAI
 # LOAD FROM STREAMLIT SECRETS
 # ---------------------------------------------------------
 
+
 def load_azure_creds():
     try:
         endpoint = st.secrets["AZURE_OPENAI_ENDPOINT"]

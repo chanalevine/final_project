@@ -45,6 +45,7 @@ def estimate_cost(quantity, price, price_unit, package_size):
     # If no unit conversion logic applies, return full package price
     return price
 
+
 def calculate_recipe_cost(recipe_id):
     conn = get_connection()
     cursor = conn.cursor()
@@ -61,7 +62,7 @@ def calculate_recipe_cost(recipe_id):
 
     # Load recipe ingredients
     cursor.execute("""
-        SELECT 
+        SELECT
             ri.quantity,
             ing.id,
             ing.name,

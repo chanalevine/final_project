@@ -9,6 +9,7 @@ DB_PATH = "database/food_data.db"
 # 1. Scrape Wikipedia description
 # ---------------------------------------------------------
 
+
 def get_wikipedia_description(ingredient):
     # Convert ingredient to Wikipedia-style title
     title = ingredient.strip().replace(" ", "_")
@@ -90,9 +91,9 @@ def update_all_descriptions():
 
         if desc:
             store_description(ing, desc)
-            print(f"  ✔ Stored description")
+            print("  ✔ Stored description")
         else:
-            print(f"  ✘ No description found")
+            print("  ✘ No description found")
 
         time.sleep(0.5)  # Be polite to Wikipedia
 

@@ -1,6 +1,7 @@
 import sqlite3
 import os
 
+
 def init_db():
     db_path = os.path.join("database", "food_data.db")
 
@@ -61,7 +62,7 @@ def init_db():
     conn.commit()
     conn.close()
     print("Database recreated successfully.")
-    
+
 
 if __name__ == "__main__":
     init_db()
